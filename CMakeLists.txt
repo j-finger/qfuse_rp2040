@@ -65,6 +65,8 @@ if(CrossCompiling)
         hardware_watchdog
         hardware_clocks
         hardware_pwm
+        pico_multicore
+        pico_util_queue
     )
 
     pico_add_extra_outputs(labs)
