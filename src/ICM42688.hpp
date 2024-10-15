@@ -1,9 +1,23 @@
-#ifndef ICM42688
-#define ICMD42688
-#endif
+#ifndef ICM42688_H
+#define ICM42688_H
 
+#include <stdio.h>
 #include <stdint.h>
+#include <string.h>
+#include <vector>
+#include <string>
+#include <map>
 
+// Include Pico SDK headers
+#include "pico/stdlib.h"
+#include "hardware/gpio.h"
+#include "hardware/spi.h"
+
+// JSON library
+#include "json.hpp"
+using json = nlohmann::json;
+
+// Contains all register address definitions
 namespace ICM42688REG
 {
     // User Bank 0 registers
@@ -156,7 +170,9 @@ namespace ICM42688REG
     static constexpr uint8_t OFFSET_USER8 = 0x7F;
 }
 
-namespace ICM42688SET {
+// Contains all setting value definitions
+namespace ICM42688SET
+{
     // GYRO_FS_SEL DEG/SEC
     static constexpr uint8_t GYRO_FS_SEL_2000   = 0b000;
     static constexpr uint8_t GYRO_FS_SEL_1000   = 0b001;
@@ -204,3 +220,231 @@ namespace ICM42688SET {
     static constexpr uint8_t ACCEL_ODR_1        = 0b1110;
     static constexpr uint8_t ACCEL_ODR_500      = 0b1111;
 }
+
+/* ----- Sensor Settings Structures ----- */
+
+// Universal struct for settings
+struct SensorSetting {
+    uint8_t value;
+    std::string name;
+};
+
+// Boolean setting struct
+struct BoolSetting {
+    bool enabled;
+    std::string name;
+};
+
+// Anti-Aliasing Filter Setting struct
+struct AAFSetting {
+    BoolSetting enabled;  // AAF Enable/Disable
+    uint8_t delt;
+    uint16_t deltsqr;
+    uint8_t bitshift;
+};
+
+// Power Modes for Accelerometer
+static const SensorSetting AccelPowerModes[] = {
+    {0x00, "Accelerometer Off (default)"},  // 00: Turns accelerometer off (default)
+    {0x02, "Low Power (LP) Mode"},          // 10: Places accelerometer in Low Power (LP) Mode
+    {0x03, "Low Noise (LN) Mode"}           // 11: Places accelerometer in Low Noise (LN) Mode
+};
+
+// Power Modes for Gyroscope
+static const SensorSetting GyroPowerModes[] = {
+    {0x00, "Gyroscope Off (default)"},      // 00: Turns gyroscope off (default)
+    {0x01, "Standby Mode"},                 // 01: Places gyroscope in Standby Mode
+    {0x03, "Low Noise (LN) Mode"}           // 11: Places gyroscope in Low Noise (LN) Mode
+};
+
+// Clock Sources
+static const SensorSetting ClockSources[] = {
+    {0x00, "Internal"},
+    {0x01, "Auto"},
+    {0x02, "Reserved"},
+    {0x03, "External"}
+};
+
+// Accelerometer ODR settings
+static const SensorSetting AccelODRSettings[] = {
+    {ICM42688SET::ACCEL_ODR_32K, "32kHz"}, //0 LN
+    {ICM42688SET::ACCEL_ODR_16K, "16kHz"}, //1 LN
+    {ICM42688SET::ACCEL_ODR_8K, "8kHz"}, //2 LN
+    {ICM42688SET::ACCEL_ODR_4K, "4kHz"}, //3 LN
+    {ICM42688SET::ACCEL_ODR_2K, "2kHz"}, //4 LN
+    {ICM42688SET::ACCEL_ODR_1K, "1kHz"}, //5  LN
+    {ICM42688SET::ACCEL_ODR_200, "200Hz"}, //6 LN or LP
+    {ICM42688SET::ACCEL_ODR_100, "100Hz"}, //7 LN or LP
+    {ICM42688SET::ACCEL_ODR_50, "50Hz"}, //8 LN or LP
+    {ICM42688SET::ACCEL_ODR_25, "25Hz"}, //9 LN or LP
+    {ICM42688SET::ACCEL_ODR_12, "12.5Hz"}, //10 LN or LP
+    {ICM42688SET::ACCEL_ODR_6, "6.25Hz"}, //11 LP
+    {ICM42688SET::ACCEL_ODR_3, "3.125Hz"}, //12 LP
+    {ICM42688SET::ACCEL_ODR_1, "1.5625Hz"}, //13 LP
+    {ICM42688SET::ACCEL_ODR_500, "500Hz"} //14 LN or LP
+};
+
+// Accelerometer FSR settings
+static const SensorSetting AccelFSRSettings[] = {
+    {ICM42688SET::ACCEL_FS_SEL_16, "±16g"},
+    {ICM42688SET::ACCEL_FS_SEL_8, "±8g"},
+    {ICM42688SET::ACCEL_FS_SEL_4, "±4g"},
+    {ICM42688SET::ACCEL_FS_SEL_2, "±2g"}
+};
+
+// Gyroscope ODR settings
+static const SensorSetting GyroODRSettings[] = {
+    {ICM42688SET::GYRO_ODR_32K, "32kHz"}, //0
+    {ICM42688SET::GYRO_ODR_16K, "16kHz"}, //1
+    {ICM42688SET::GYRO_ODR_8K, "8kHz"},  //2
+    {ICM42688SET::GYRO_ODR_4K, "4kHz"}, //3
+    {ICM42688SET::GYRO_ODR_2K, "2kHz"}, //4
+    {ICM42688SET::GYRO_ODR_1K, "1kHz"}, //5
+    {ICM42688SET::GYRO_ODR_200, "200Hz"}, //6
+    {ICM42688SET::GYRO_ODR_100, "100Hz"}, //7
+    {ICM42688SET::GYRO_ODR_50, "50Hz"}, //8
+    {ICM42688SET::GYRO_ODR_25, "25Hz"}, //9
+    {ICM42688SET::GYRO_ODR_12, "12.5Hz"}, //10
+    {ICM42688SET::GYRO_ODR_500, "500Hz"} //11
+};
+
+// Gyroscope FSR settings
+static const SensorSetting GyroFSRSettings[] = {
+    {ICM42688SET::GYRO_FS_SEL_2000, "±2000dps"},
+    {ICM42688SET::GYRO_FS_SEL_1000, "±1000dps"},
+    {ICM42688SET::GYRO_FS_SEL_500, "±500dps"},
+    {ICM42688SET::GYRO_FS_SEL_250, "±250dps"},
+    {ICM42688SET::GYRO_FS_SEL_125, "±125dps"},
+    {ICM42688SET::GYRO_FS_SEL_62, "±62.5dps"},
+    {ICM42688SET::GYRO_FS_SEL_31, "±31.25dps"},
+    {ICM42688SET::GYRO_FS_SEL_15, "±15.625dps"}
+};
+
+// Mapping of FSR to sensitivity for accelerometer and gyroscope
+static std::map<uint8_t, float> accel_sensitivity_map = {
+    {ICM42688SET::ACCEL_FS_SEL_2, 16384.0f},
+    {ICM42688SET::ACCEL_FS_SEL_4, 8192.0f},
+    {ICM42688SET::ACCEL_FS_SEL_8, 4096.0f},
+    {ICM42688SET::ACCEL_FS_SEL_16, 2048.0f}
+};
+
+static std::map<uint8_t, float> gyro_sensitivity_map = {
+    {ICM42688SET::GYRO_FS_SEL_2000, 16.4f},
+    {ICM42688SET::GYRO_FS_SEL_1000, 32.8f},
+    {ICM42688SET::GYRO_FS_SEL_500, 65.5f},
+    {ICM42688SET::GYRO_FS_SEL_250, 131.0f},
+    {ICM42688SET::GYRO_FS_SEL_125, 262.0f},
+    {ICM42688SET::GYRO_FS_SEL_62, 524.3f},
+    {ICM42688SET::GYRO_FS_SEL_31, 1048.6f},
+    {ICM42688SET::GYRO_FS_SEL_15, 2097.2f}
+};
+
+/* ----- Output Data Structures ----- */
+
+// Data structures for sensor data
+struct AccelerometerData {
+    float x;
+    float y;
+    float z;
+};
+
+struct GyroscopeData {
+    float x;
+    float y;
+    float z;
+};
+
+struct TemperatureData {
+    float celcius;
+};
+
+struct SensorData {
+    AccelerometerData accel;
+    GyroscopeData gyro;
+    TemperatureData temp;
+    uint32_t imu_timestamp; // IMU timestamp (24-bit)
+};
+
+class IMU {
+public:
+    // Constructor
+    IMU(spi_inst_t* spi_port, uint cs_pin, uint8_t subdevice_id);
+
+    // Initialize the IMU
+    void initialize();
+
+    // Read sensor data
+    SensorData read_sensor_data();
+
+    // Generate JSON data
+    json jsonify_data(const SensorData& data_in, const std::string& device_id);
+
+    // Generate JSON settings
+    json jsonify_settings(const std::string& device_id);
+
+    // Read IMU timestamp
+    uint32_t read_imu_timestamp();
+
+private:
+    // SPI variables
+    spi_inst_t* spi_port_;
+    uint cs_pin_;
+    uint8_t subdevice_id_;
+
+    // Settings
+    SensorSetting accel_odr_setting_;
+    SensorSetting accel_fsr_setting_;
+    SensorSetting gyro_odr_setting_;
+    SensorSetting gyro_fsr_setting_;
+    uint defaultFSR_;
+    uint defaultODR_;
+
+    // Sensitivity values
+    float accel_sensitivity_;
+    float gyro_sensitivity_;
+
+    // Power modes
+    SensorSetting accel_power_mode_;
+    SensorSetting gyro_power_mode_;
+    bool temp_disabled_;
+
+    // Clock settings
+    SensorSetting clock_source_setting_;
+    bool rtc_mode_enabled_;
+
+    // Timestamp enabled
+    bool timestamp_enabled_;
+
+    // Filter settings
+    AAFSetting accel_aaf_setting_;
+    AAFSetting gyro_aaf_setting_;
+
+    // Private methods
+    void cs_select();
+    void cs_deselect();
+    void write_register(uint8_t reg_addr, uint8_t data);
+    uint8_t read_register(uint8_t reg_addr);
+    void read_registers(uint8_t reg_addr, uint8_t* data, size_t length);
+    void select_register_bank(uint8_t bank);
+    void print_register(uint8_t reg_addr);
+    void setup_spi();
+    void reset_device_configuration();
+    void configure_sensor();
+    AccelerometerData read_accel();
+    GyroscopeData read_gyro();
+    TemperatureData read_temp();
+    void set_accel_odr(const uint odr);
+    void set_accel_fsr(const uint fsr);
+    void set_gyro_odr(const uint odr);
+    void set_gyro_fsr(const uint fsr);
+    void calculate_sensitivity();
+    void set_power_modes(const SensorSetting& accel_mode, const SensorSetting& gyro_mode, bool temp_disabled);
+    void set_clock();
+};
+
+/* Implementations */
+// Include the rest of your method implementations here, similar to how it's done in your main.cpp
+
+// For brevity, only key methods are shown; please include all method implementations.
+
+#endif // ICM42688_HPP

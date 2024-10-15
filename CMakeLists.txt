@@ -36,7 +36,8 @@ if(CrossCompiling)
         PUBLIC
         src/main.cpp
         src/json.hpp
-        src/ICM42688.h
+        src/ICM42688.hpp
+        src/ICM42688.cpp
         src/drivers/logging/logging.cpp
     )
     target_include_directories(labs
@@ -66,7 +67,7 @@ if(CrossCompiling)
         hardware_clocks
         hardware_pwm
         pico_multicore
-        pico_util_queue
+        # pico_util_queue
     )
 
     pico_add_extra_outputs(labs)
@@ -84,7 +85,8 @@ else()
         PUBLIC
         src/main.cpp
         src/json.hpp
-        src/ICM42688.h
+        src/ICM42688.hpp
+        src/ICM42688.cpp
         src/drivers/logging/logging.cpp
         tests/mocks/pico/stdlib.cpp
         tests/mocks/pico/time.cpp
