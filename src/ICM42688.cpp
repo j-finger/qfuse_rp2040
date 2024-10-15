@@ -76,21 +76,15 @@ json IMU::jsonify_settings(const std::string& device_id) {
 
 // Read IMU timestamp
 uint32_t IMU::read_imu_timestamp() {
+    // Strobe the signal path reset register
     uint8_t signal_path_reset_val = 0b01100100;
     write_register(ICM42688REG::SIGNAL_PATH_RESET, signal_path_reset_val);
 
     // Switch to User Bank 1
     select_register_bank(1);
-
     uint8_t tmstval0 = read_register(ICM42688REG::TMSTVAL0);
     uint8_t tmstval1 = read_register(ICM42688REG::TMSTVAL1);
     uint8_t tmstval2 = read_register(ICM42688REG::TMSTVAL2);
-
-    // Print the values for debugging
-    printf("TMSTVAL0: 0x%02X\n", tmstval0);
-    printf("TMSTVAL1: 0x%02X\n", tmstval1);
-    printf("TMSTVAL2: 0x%02X\n", tmstval2);
-    
     // Return to User Bank 0
     select_register_bank(0);
 
@@ -186,8 +180,8 @@ void IMU::reset_device_configuration(){
 void IMU::configure_sensor() {
     reset_device_configuration();
     
+    set_clock(); // Uncomment if clock settings are needed
     set_power_modes(GyroPowerModes[2], AccelPowerModes[2], false); // Accel & Gyro Low Noise, Temp Enabled
-    // set_clock(); // Uncomment if clock settings are needed
 
     // Set custom accelerometer settings
     set_accel_odr(7); // 100Hz
@@ -364,25 +358,22 @@ void IMU::set_power_modes(const SensorSetting& accel_mode, const SensorSetting& 
 /* ----- Clock Configuration ----- */
 
 void IMU::set_clock() {
-    // Configure TMST_CONFIG to enable timestamps, FSYNC, and delta timestamps
-    uint8_t tmst_config_val = 0b00011011;  // Enable TMST_EN | TMST_FSYNC_EN | TMST_RES, without TMST_DELTA_EN
-    write_register(ICM42688REG::TMST_CONFIG, tmst_config_val);
-    
-    // Set INTF_CONFIG1 to use external RTC clock and set proper RTC mode
-    uint8_t intf_config1_val = 0b00000101;  // CLKSEL = 01 (external clock) | RTC_MODE enabled
-    write_register(ICM42688REG::INTF_CONFIG1, intf_config1_val);
-
-    // Configure INT2 to be push-pull, active low
-    uint8_t int_config_val = 0b00110000;  // INT2_DRIVE_CIRCUIT = push-pull | INT2_POLARITY = active low
-    write_register(ICM42688REG::INT_CONFIG, int_config_val);
-
-    // Latch the timestamp once at the beginning, trigger TMST_STROBE
-    uint8_t signal_path_reset_val = 0b01100100;  // TMST_STROBE = 1 | DMP_MEM_RESET_EN | DMP_INIT_EN
-    write_register(ICM42688REG::SIGNAL_PATH_RESET, signal_path_reset_val);
 
     // Configure Pin 9 as CLKIN for external clock
     select_register_bank(1);
     uint8_t intf_config5_val = 0b00000100;  // PIN9_FUNCTION = CLKIN
     write_register(ICM42688REG::INTF_CONFIG5, intf_config5_val);
     select_register_bank(0);
+
+
+    // Configure TMST_CONFIG to enable timestamps, FSYNC, and delta timestamps
+    uint8_t tmst_config_val = 0b00011011;  // Enable TMST_EN | TMST_FSYNC_EN | TMST_RES, without TMST_DELTA_EN
+    write_register(ICM42688REG::TMST_CONFIG, tmst_config_val);
+
+    // Latch the timestamp once at the beginning, trigger TMST_STROBE
+    uint8_t signal_path_reset_val = 0b01100100;  // TMST_STROBE = 1 | DMP_MEM_RESET_EN | DMP_INIT_EN
+    write_register(ICM42688REG::SIGNAL_PATH_RESET, signal_path_reset_val);
+
+
+
 }
