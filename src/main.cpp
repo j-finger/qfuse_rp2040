@@ -65,10 +65,10 @@ class RP2040Controller {
 public:
     RP2040Controller() {
         // Initialize UART
-        // uart_initialize();
+        uart_initialize();
 
         // Initialize the queue
-        // queue_init(&json_queue, sizeof(char) * JSON_STRING_MAX_LENGTH, JSON_QUEUE_SIZE);
+        queue_init(&json_queue, sizeof(char) * JSON_STRING_MAX_LENGTH, JSON_QUEUE_SIZE);
 
         // Get RP2040 device ID
         read_device_id();
@@ -93,20 +93,20 @@ public:
         }
 
 
-        // // Send settings JSON for each IMU over UART
-        // for (auto& imu : imus_) {
-        //     json settings_json = imu.jsonify_settings(device_id_);
-        //     enqueue_json(settings_json); // Enqueue JSON for UART transmission
-        //     printf("Enqueued Settings JSON:\n%s\n\n", settings_json.dump(4).c_str());
-        // }
+        // Send settings JSON for each IMU over UART
+        for (auto& imu : imus_) {
+            json settings_json = imu.jsonify_settings(device_id_);
+            enqueue_json(settings_json); // Enqueue JSON for UART transmission
+            printf("Enqueued Settings JSON:\n%s\n\n", settings_json.dump(4).c_str());
+        }
 
         // Launch Core 1 to handle UART transmissions
-        // multicore_launch_core1(uart_task_entry);
+        multicore_launch_core1(uart_task_entry);
     }
 
     void run() {
         printf("Running RP2040 Controller\n");
-        // absolute_time_t last_read_time = get_absolute_time();
+        absolute_time_t last_read_time = get_absolute_time();
 
         while (true) {
 
@@ -118,23 +118,23 @@ public:
             }
 
 
-            // absolute_time_t current_time = get_absolute_time();
+            absolute_time_t current_time = get_absolute_time();
 
-            // // Check if it's time to read sensor data (e.g., every 1 second)
-            // if (absolute_time_diff_us(last_read_time, current_time) >= 1000000) { // 1 second
-            //     last_read_time = current_time;
+            // Check if it's time to read sensor data (e.g., every 1 second)
+            if (absolute_time_diff_us(last_read_time, current_time) >= 1000000) { // 1 second
+                last_read_time = current_time;
 
-            //     // Read sensor data from each IMU
-            //     for (auto& imu : imus_) {
-            //         SensorData data = imu.read_sensor_data();
-            //         json data_json = imu.jsonify_data(data, device_id_);
-            //         enqueue_json(data_json); // Enqueue JSON for UART transmission
-            //         printf("Enqueued Data JSON:\n%s\n\n", data_json.dump(4).c_str());
-            //     }
-            // }
+                // Read sensor data from each IMU
+                for (auto& imu : imus_) {
+                    SensorData data = imu.read_sensor_data();
+                    json data_json = imu.jsonify_data(data, device_id_);
+                    enqueue_json(data_json); // Enqueue JSON for UART transmission
+                    printf("Enqueued Data JSON:\n%s\n\n", data_json.dump(4).c_str());
+                }
+            }
 
-            // // Perform other non-blocking tasks here if needed
-            // tight_loop_contents(); // Yield to other processes
+            // Perform other non-blocking tasks here if needed
+            tight_loop_contents(); // Yield to other processes
         }
     }
 
@@ -143,78 +143,78 @@ private:
     std::string device_id_;
 
     // UART and Queue Definitions
-    // queue_t json_queue;
+    queue_t json_queue;
 
-    // // Function to send JSON over UART
-    // void send_json(const json& json_obj) {
-    //     std::string json_str = json_obj.dump();
-    //     // Ensure the JSON string does not exceed the maximum length
-    //     if (json_str.length() >= JSON_STRING_MAX_LENGTH) {
-    //         printf("JSON string too long to enqueue.\n");
-    //         return;
-    //     }
+    // Function to send JSON over UART
+    void send_json(const json& json_obj) {
+        std::string json_str = json_obj.dump();
+        // Ensure the JSON string does not exceed the maximum length
+        if (json_str.length() >= JSON_STRING_MAX_LENGTH) {
+            printf("JSON string too long to enqueue.\n");
+            return;
+        }
 
-    //     // Enqueue the JSON string
-    //     if (queue_add_blocking(&json_queue, json_str.c_str()) != PICO_OK) {
-    //         printf("Failed to enqueue JSON string.\n");
-    //     }
-    // }
+        // Enqueue the JSON string
+        if (queue_add_blocking(&json_queue, json_str.c_str()) != PICO_OK) {
+            printf("Failed to enqueue JSON string.\n");
+        }
+    }
 
     // Function to enqueue JSON strings for UART transmission
-    // void enqueue_json(const json& json_obj) {
-    //     std::string json_str = json_obj.dump();
-    //     // Ensure the JSON string does not exceed the maximum length
-    //     if (json_str.length() >= JSON_STRING_MAX_LENGTH) {
-    //         printf("JSON string too long to enqueue.\n");
-    //         return;
-    //     }
+    void enqueue_json(const json& json_obj) {
+        std::string json_str = json_obj.dump();
+        // Ensure the JSON string does not exceed the maximum length
+        if (json_str.length() >= JSON_STRING_MAX_LENGTH) {
+            printf("JSON string too long to enqueue.\n");
+            return;
+        }
 
-    //     // Enqueue the JSON string
-    //     if (queue_add_blocking(&json_queue, json_str.c_str()) != PICO_OK) { // Changed condition
-    //         printf("Failed to enqueue JSON string.\n");
-    //     }
-    // }
+        // Enqueue the JSON string
+        if (queue_add_blocking(&json_queue, json_str.c_str()) != PICO_OK) { // Changed condition
+            printf("Failed to enqueue JSON string.\n");
+        }
+    }
 
-    // // UART Initialization
-    // void uart_initialize() {
-    //     // Set the GPIO pin mux to the UART function
-    //     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
-    //     gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
+    // UART Initialization
+    void uart_initialize() {
+        // Set the GPIO pin mux to the UART function
+        gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
+        gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
 
-    //     // Initialize the UART with the specified baud rate
-    //     uart_init(UART_ID, BAUD_RATE);
+        // Initialize the UART with the specified baud rate
+        uart_init(UART_ID, BAUD_RATE);
 
-    //     // Set UART data format
-    //     uart_set_format(UART_ID, DATA_BITS, STOP_BITS, PARITY);
+        // Set UART data format
+        uart_set_format(UART_ID, DATA_BITS, STOP_BITS, PARITY);
 
-    //     // Enable FIFO
-    //     uart_set_fifo_enabled(UART_ID, true);
+        // Enable FIFO
+        uart_set_fifo_enabled(UART_ID, true);
 
-    //     // Disable flow control CTS/RTS
-    //     uart_set_hw_flow(UART_ID, false, false);
-    // }
+        // Disable flow control CTS/RTS
+        uart_set_hw_flow(UART_ID, false, false);
+    }
 
-    // // Function to send data over UART
-    // void uart_send(const char* data) {
-    //     size_t len = strlen(data);
-    //     uart_write_blocking(UART_ID, (const uint8_t*)data, len);
-    // }
+    // Function to send data over UART
+    void uart_send(const char* data) {
+        size_t len = strlen(data);
+        uart_write_blocking(UART_ID, (const uint8_t*)data, len);
+    }
 
-    // // Function to receive data over UART (to be further developed)
-    // void uart_receive(char* data) {
-    //     int idx = 0;
-    //     while (uart_is_readable(UART_ID)) {
-    //         char ch = uart_getc(UART_ID);
-    //         data[idx++] = ch;
-    //         if (ch == '}') { // Assuming JSON ends with '}'
-    //             break;
-    //         }
-    //         if (idx >= 255) { // Prevent buffer overflow
-    //             break;
-    //         }
-    //     }
-    //     data[idx] = '\0'; // Null-terminate the string
-    // }
+    // Function to receive data over UART (to be further developed)
+    void uart_receive(char* data) {
+        int idx = 0;
+        while (uart_is_readable(UART_ID)) {
+            char ch = uart_getc(UART_ID);
+            data[idx++] = ch;
+            if (ch == '}') { // Assuming JSON ends with '}'
+                break;
+            }
+            if (idx >= 255) { // Prevent buffer overflow
+                break;
+            }
+        }
+        data[idx] = '\0'; // Null-terminate the string
+    }
 
     // Read device ID from unique board ID
     void read_device_id() {
@@ -228,19 +228,19 @@ private:
         printf("Device ID: %s\n", device_id_.c_str());
     }
 
-    // // UART Task Entry (Core 1)
-    // static void uart_task_entry() {
-    //     char json_str[JSON_STRING_MAX_LENGTH];
-    //     while (true) {
-    //         // Dequeue a JSON string (blocking call)
-    //         if (queue_remove_blocking(&json_queue, json_str)) {
-    //             // Send the JSON string over UART
-    //             uart_write_blocking(UART_ID, (const uint8_t*)json_str, strlen(json_str));
-    //             uart_write_blocking(UART_ID, (const uint8_t*)"\n", 1); // Optional: Add newline for readability
-    //             printf("Sent JSON over UART:\n%s\n\n", json_str);
-    //         }
-    //     }
-    // }
+    // UART Task Entry (Core 1)
+    static void uart_task_entry() {
+        char json_str[JSON_STRING_MAX_LENGTH];
+        while (true) {
+            // Dequeue a JSON string (blocking call)
+            if (queue_remove_blocking(&json_queue, json_str)) {
+                // Send the JSON string over UART
+                uart_write_blocking(UART_ID, (const uint8_t*)json_str, strlen(json_str));
+                uart_write_blocking(UART_ID, (const uint8_t*)"\n", 1); // Optional: Add newline for readability
+                printf("Sent JSON over UART:\n%s\n\n", json_str);
+            }
+        }
+    }
 };
 
 int main() {
