@@ -377,10 +377,10 @@ public:
     SensorData read_sensor_data();
 
     // Generate JSON data
-    json jsonify_data(const SensorData& data_in, const std::string& device_id);
+    json jsonify_data(const SensorData& data_in);
 
     // Generate JSON settings
-    json jsonify_settings(const std::string& device_id);
+    json jsonify_settings();
 
     // Read IMU timestamp
     uint32_t read_imu_timestamp();

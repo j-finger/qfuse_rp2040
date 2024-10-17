@@ -32,9 +32,9 @@ SensorData IMU::read_sensor_data() {
 }
 
 // Generate JSON data
-json IMU::jsonify_data(const SensorData& data_in, const std::string& device_id) {
+json IMU::jsonify_data(const SensorData& data_in) {
     json sensor_data_json;
-    sensor_data_json["subdevice"] = subdevice_id_;
+    sensor_data_json["data"]["subdevice"] = subdevice_id_;
     sensor_data_json["data"]["accelerometer"]["x"] = data_in.accel.x;
     sensor_data_json["data"]["accelerometer"]["y"] = data_in.accel.y;
     sensor_data_json["data"]["accelerometer"]["z"] = data_in.accel.z;
@@ -44,15 +44,14 @@ json IMU::jsonify_data(const SensorData& data_in, const std::string& device_id) 
     sensor_data_json["data"]["temperature"] = data_in.temp.celcius;
     char hex_timestamp[9]; // 8 characters for hex + 1 for null terminator
     sprintf(hex_timestamp, "%08x", data_in.imu_timestamp);
-    sensor_data_json["timestamp"] = hex_timestamp;
+    sensor_data_json["data"]["timestamp"] = hex_timestamp;
     return sensor_data_json;
 }
 
 // Generate JSON settings
-json IMU::jsonify_settings(const std::string& device_id) {
+json IMU::jsonify_settings() {
     json settings_data_json;
-    settings_data_json["device"] = device_id;
-    settings_data_json["subdevice"] = subdevice_id_;
+    settings_data_json["settings"]["subdevice"] = subdevice_id_;
 
     settings_data_json["settings"]["accel_odr"] = accel_odr_setting_.name;
     settings_data_json["settings"]["accel_fsr"] = accel_fsr_setting_.name;
