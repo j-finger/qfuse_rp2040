@@ -34,19 +34,38 @@ SensorData IMU::read_sensor_data() {
 // Generate JSON data
 json IMU::jsonify_data(const SensorData& data_in) {
     json sensor_data_json;
-    sensor_data_json["data"]["subdevice"] = subdevice_id_;
-    sensor_data_json["data"]["accelerometer"]["x"] = data_in.accel.x;
-    sensor_data_json["data"]["accelerometer"]["y"] = data_in.accel.y;
-    sensor_data_json["data"]["accelerometer"]["z"] = data_in.accel.z;
-    sensor_data_json["data"]["gyroscope"]["x"] = data_in.gyro.x;
-    sensor_data_json["data"]["gyroscope"]["y"] = data_in.gyro.y;
-    sensor_data_json["data"]["gyroscope"]["z"] = data_in.gyro.z;
-    sensor_data_json["data"]["temperature"] = data_in.temp.celcius;
+
     char hex_timestamp[9]; // 8 characters for hex + 1 for null terminator
     sprintf(hex_timestamp, "%08x", data_in.imu_timestamp);
-    sensor_data_json["data"]["timestamp"] = hex_timestamp;
+    
+    sensor_data_json["subdevice"] = subdevice_id_;
+    sensor_data_json["accelerometer"]["x"] = data_in.accel.x;
+    sensor_data_json["accelerometer"]["y"] = data_in.accel.y;
+    sensor_data_json["accelerometer"]["z"] = data_in.accel.z;
+    sensor_data_json["gyroscope"]["x"] = data_in.gyro.x;
+    sensor_data_json["gyroscope"]["y"] = data_in.gyro.y;
+    sensor_data_json["gyroscope"]["z"] = data_in.gyro.z;
+    sensor_data_json["temperature"] = data_in.temp.celcius;
+    sensor_data_json["timestamp"] = hex_timestamp;
     return sensor_data_json;
 }
+
+// // Generate JSON data
+// json IMU::jsonify_data(const SensorData& data_in) {
+//     json sensor_data_json;
+//     sensor_data_json["data"]["subdevice"] = subdevice_id_;
+//     sensor_data_json["data"]["accelerometer"]["x"] = data_in.accel.x;
+//     sensor_data_json["data"]["accelerometer"]["y"] = data_in.accel.y;
+//     sensor_data_json["data"]["accelerometer"]["z"] = data_in.accel.z;
+//     sensor_data_json["data"]["gyroscope"]["x"] = data_in.gyro.x;
+//     sensor_data_json["data"]["gyroscope"]["y"] = data_in.gyro.y;
+//     sensor_data_json["data"]["gyroscope"]["z"] = data_in.gyro.z;
+//     sensor_data_json["data"]["temperature"] = data_in.temp.celcius;
+//     char hex_timestamp[9]; // 8 characters for hex + 1 for null terminator
+//     sprintf(hex_timestamp, "%08x", data_in.imu_timestamp);
+//     sensor_data_json["data"]["timestamp"] = hex_timestamp;
+//     return sensor_data_json;
+// }
 
 // Generate JSON settings
 json IMU::jsonify_settings() {

@@ -20,8 +20,8 @@
 using json = nlohmann::json;
 
 // Define queue parameters
-#define JSON_QUEUE_SIZE 100          // Define the maximum number of JSON messages in the queue
-#define JSON_STRING_MAX_LENGTH 8000  // Increased max length to accommodate more data
+#define JSON_QUEUE_SIZE 10          // Define the maximum number of JSON messages in the queue
+#define JSON_STRING_MAX_LENGTH 3000  // Increased max length to accommodate more data
 
 // Create a queue for JSON strings
 queue_t json_queue;
@@ -36,6 +36,7 @@ queue_t json_queue;
 #define UART_RX_PIN 4
 
 // UART and SPI Macros
+// #define IMU_COUNT 2  // Number of IMUs connected
 #define IMU_COUNT 4  // Number of IMUs connected
 
 // SPI0 (First two IMUs)
@@ -46,6 +47,7 @@ queue_t json_queue;
 #define SPI0_PORT spi1
 #define SPI0_BAUD_RATE (115200)  // 1 MHz
 
+// const uint SPI0_CS_PINS[] = {9}; // CS pins for IMUs on SPI0
 const uint SPI0_CS_PINS[] = {9, 13}; // CS pins for IMUs on SPI0
 
 // SPI1 (Next two IMUs)
@@ -56,6 +58,7 @@ const uint SPI0_CS_PINS[] = {9, 13}; // CS pins for IMUs on SPI0
 #define SPI1_PORT spi0
 #define SPI1_BAUD_RATE (115200)  // 1 MHz
 
+// const uint SPI1_CS_PINS[] = {17}; // CS pins for IMUs on SPI1
 const uint SPI1_CS_PINS[] = {17, 21}; // CS pins for IMUs on SPI1
 
 // Global Function for Core 1
@@ -78,11 +81,15 @@ public:
         // Initialize UART
         uart_initialize();
 
+        // TODO: Wait for the 'Connected' message over UART
+        wait_for_connected_message();  
+
         // Initialize the queue
         queue_init(&json_queue, sizeof(char) * JSON_STRING_MAX_LENGTH, JSON_QUEUE_SIZE);
 
         // Get RP2040 device ID
         read_device_id();
+
 
         // Initialize SPI0
         spi_init(SPI0_PORT, SPI0_BAUD_RATE);
@@ -96,7 +103,7 @@ public:
         gpio_set_function(SPI1_MOSI_PIN, GPIO_FUNC_SPI);
         gpio_set_function(SPI1_MISO_PIN, GPIO_FUNC_SPI);
 
-        max_measurements = 2;  // Collect 5 samples per IMU
+        // max_measurements = 2;  // Collect 5 samples per IMU
 
         // Initialize IMUs
         // IMUs on SPI0
@@ -174,8 +181,6 @@ public:
                     // Build the UART packet
                     json uart_packet;
                     uart_packet["device"] = device_id_;
-                    // Get the current time, convert to string
-                    uart_packet["time"] = std::to_string(to_ms_since_boot(get_absolute_time()));
 
                     json data_array = json::array();
 
@@ -194,7 +199,7 @@ public:
 
                     // Enqueue the UART packet
                     enqueue_json(uart_packet);
-                    printf("Enqueued Data JSON:\n%s\n\n", uart_packet.dump(4).c_str());
+                    // printf("Enqueued Data JSON:\n%s\n\n", uart_packet.dump(4).c_str());
 
                     // Reset measurement counts and clear data samples
                     for (size_t i = 0; i < measurement_counts_.size(); ++i) {
@@ -212,13 +217,31 @@ public:
 private:
     std::vector<IMU> imus_;
     std::string device_id_;
-    uint8_t max_measurements;
+    const static uint8_t max_measurements = 3;
     std::vector<std::vector<json>> imu_data_samples_; // Stores samples per IMU
     std::vector<uint8_t> measurement_counts_; // Counts per IMU
 
-    // Function to enqueue JSON strings for UART transmission
+    // // Function to enqueue JSON strings for UART transmission
+    // void enqueue_json(const json& json_obj) {
+    //     std::string json_str = json_obj.dump();
+    //     // Ensure the JSON string does not exceed the maximum length
+    //     if (json_str.length() >= JSON_STRING_MAX_LENGTH) {
+    //         printf("JSON string too long to enqueue.\n");
+    //         return;
+    //     }
+
+    //     // Enqueue the JSON string
+    //     if (!queue_try_add(&json_queue, json_str.c_str())) {
+    //         printf("Failed to enqueue JSON string.\n");
+    //     }
+    // }
+
+// Function to enqueue JSON strings for UART transmission
     void enqueue_json(const json& json_obj) {
         std::string json_str = json_obj.dump();
+        // Append newline character to indicate end of message
+        json_str += "\n";
+
         // Ensure the JSON string does not exceed the maximum length
         if (json_str.length() >= JSON_STRING_MAX_LENGTH) {
             printf("JSON string too long to enqueue.\n");
@@ -230,6 +253,7 @@ private:
             printf("Failed to enqueue JSON string.\n");
         }
     }
+
 
     // UART Initialization
     void uart_initialize() {
@@ -244,7 +268,7 @@ private:
         uart_set_format(UART_ID, DATA_BITS, STOP_BITS, PARITY);
 
         // Enable FIFO
-        uart_set_fifo_enabled(UART_ID, true);
+        // uart_set_fifo_enabled(UART_ID, true);
 
         // Disable flow control CTS/RTS
         uart_set_hw_flow(UART_ID, false, false);
@@ -283,12 +307,42 @@ private:
         device_id_ = std::string(id_str);
         printf("Device ID: %s\n", device_id_.c_str());
     }
+
+    // Function to wait for 'Connected' message over UART
+    void wait_for_connected_message() {
+        const int BUFFER_SIZE = 256;
+        char buffer[BUFFER_SIZE];
+        int idx = 0;
+        printf("Waiting for 'Connected' message over UART...\n");
+        while (true) {
+            // Read one byte at a time
+            if (uart_is_readable(UART_ID)) {
+                char ch = uart_getc(UART_ID);
+                buffer[idx++] = ch;
+                if (ch == '\n' || idx >= BUFFER_SIZE - 1) {
+                    printf("Received message: %s\n", buffer);
+                    buffer[idx] = '\0'; // Null-terminate
+                    if (strcmp(buffer, "Connected\n") == 0 || strcmp(buffer, "Connected") == 0) {
+                        printf("Received 'Connected' message over UART.\n");
+                        break;
+                    } else {
+                        // Reset index and buffer if message is not 'Connected'
+                        idx = 0;
+                        memset(buffer, 0, BUFFER_SIZE);
+                    }
+                }
+            } else {
+                sleep_ms(100); // Sleep to prevent tight loop
+            }
+        }
+    }
 };
 
 int main() {
     // Initialize stdio
     stdio_init_all();
-    sleep_ms(5000);  // Wait for serial connection
+    // sleep_ms(15000);  // Wait for serial connection
+    sleep_ms(3000);  // Wait for serial connection
     printf("Starting RP2040 Controller\n");
 
     // Create RP2040Controller instance

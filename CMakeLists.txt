@@ -38,7 +38,6 @@ if(CrossCompiling)
         src/json.hpp
         src/ICM42688.hpp
         src/ICM42688.cpp
-        src/drivers/logging/logging.cpp
     )
     target_include_directories(labs
         PUBLIC 
@@ -87,26 +86,17 @@ else()
         src/json.hpp
         src/ICM42688.hpp
         src/ICM42688.cpp
-        src/drivers/logging/logging.cpp
-        tests/mocks/pico/stdlib.cpp
-        tests/mocks/pico/time.cpp
-        tests/mocks/hardware/gpio.cpp
-        tests/mocks/hardware/pio.cpp
     )
     target_include_directories(labs
         PUBLIC 
         src/
-        tests/
-        tests/mocks/
     )
     target_compile_definitions(labs 
         PUBLIC
-        TEST_HARNESS=1
     )
 
 endif()
 
 target_compile_definitions(labs 
     PUBLIC
-    LOG_DRIVER_STYLE=${LogDriverImplementation}
 )
