@@ -17,6 +17,8 @@
 #include "json.hpp"
 using json = nlohmann::json;
 
+#define DECIMAL_PLACES 3
+
 // Contains all register address definitions
 namespace ICM42688REG
 {

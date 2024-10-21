@@ -21,12 +21,13 @@ using json = nlohmann::json;
 
 // Define queue parameters
 #define JSON_QUEUE_SIZE 3         // Define the maximum number of JSON messages in the queue
-#define JSON_STRING_MAX_LENGTH 20000  // Increased max length to accommodate more data
+#define JSON_STRING_MAX_LENGTH 25000  // Increased max length to accommodate more data
 const uint ODR_SEL = 6;
-const uint PACKET_STACK_SIZE = 20;
+const uint PACKET_STACK_SIZE = 50;
 
 // Create a queue for JSON strings
 queue_t json_queue;
+
 
 
 // 921600
@@ -75,8 +76,8 @@ void uart_task_entry() {
             // Send the JSON string over UART
             uart_write_blocking(UART_ID, (const uint8_t*)json_str, strlen(json_str));
             // Optionally, print it to the console for debugging
-            printf("Sent JSON over UART:\n%s\n\n", json_str);
-            // printf("Sent JSON over UART:\n");
+            // printf("Sent JSON over UART:\n%s\n\n", json_str);
+            printf("Sent JSON over UART:\n");
 
             // Free the allocated memory
             free(json_str);
@@ -94,7 +95,7 @@ public:
         uart_initialize();
 
         // TODO: Wait for the 'Connected' message over UART
-        // wait_for_connected_message();  
+        wait_for_connected_message();  
 
         // Initialize the queue to hold pointers to char arrays
         queue_init(&json_queue, sizeof(char*), JSON_QUEUE_SIZE);

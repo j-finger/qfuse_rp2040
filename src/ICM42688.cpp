@@ -34,7 +34,6 @@ SensorData IMU::read_sensor_data() {
 }
 
 
-// TODO: Make sure this function builds a JSON in the exact same format as the function above
 // Generate JSON data
 std::string IMU::jsonify_data(const SensorData& data_in) {
     char buffer[512];
@@ -43,9 +42,9 @@ std::string IMU::jsonify_data(const SensorData& data_in) {
     int written = snprintf(buffer, sizeof(buffer),
              "{\"subdevice\":\"%d\","
              "\"timestamp\":\"%08x\","
-             "\"accel\":{\"x\":%.4f,\"y\":%.4f,\"z\":%.4f},"
-             "\"gyro\":{\"x\":%.4f,\"y\":%.4f,\"z\":%.4f},"
-             "\"temperature\":%.4f}",
+             "\"accel\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f},"
+             "\"gyro\":{\"x\":%.3f,\"y\":%.3f,\"z\":%.3f},"
+             "\"temperature\":%.3f}",
              subdevice_id_,
              data_in.imu_timestamp,
              data_in.accel.x, data_in.accel.y, data_in.accel.z,
