@@ -34,25 +34,6 @@ SensorData IMU::read_sensor_data() {
 }
 
 
-// Generate JSON data
-// json IMU::jsonify_data(const SensorData& data_in) {
-//     json sensor_data_json;
-
-//     char hex_timestamp[9]; // 8 characters for hex + 1 for null terminator
-//     sprintf(hex_timestamp, "%08x", data_in.imu_timestamp);
-    
-//     sensor_data_json["subdevice"] = subdevice_id_;
-//     sensor_data_json["accelerometer"]["x"] =    data_in.accel.x;
-//     sensor_data_json["accelerometer"]["y"] =    data_in.accel.y;
-//     sensor_data_json["accelerometer"]["z"] =    data_in.accel.z;
-//     sensor_data_json["gyroscope"]["x"] =        data_in.gyro.x;
-//     sensor_data_json["gyroscope"]["y"] =        data_in.gyro.y;
-//     sensor_data_json["gyroscope"]["z"] =        data_in.gyro.z;
-//     sensor_data_json["temperature"] =           data_in.temp.celcius;
-//     sensor_data_json["timestamp"] = hex_timestamp;
-//     return sensor_data_json;
-// }
-
 // TODO: Make sure this function builds a JSON in the exact same format as the function above
 // Generate JSON data
 std::string IMU::jsonify_data(const SensorData& data_in) {
@@ -74,23 +55,6 @@ std::string IMU::jsonify_data(const SensorData& data_in) {
     return std::string(buffer);
 }
 
-
-// // Generate JSON data
-// json IMU::jsonify_data(const SensorData& data_in) {
-//     json sensor_data_json;
-//     sensor_data_json["data"]["subdevice"] = subdevice_id_;
-//     sensor_data_json["data"]["accelerometer"]["x"] = data_in.accel.x;
-//     sensor_data_json["data"]["accelerometer"]["y"] = data_in.accel.y;
-//     sensor_data_json["data"]["accelerometer"]["z"] = data_in.accel.z;
-//     sensor_data_json["data"]["gyroscope"]["x"] = data_in.gyro.x;
-//     sensor_data_json["data"]["gyroscope"]["y"] = data_in.gyro.y;
-//     sensor_data_json["data"]["gyroscope"]["z"] = data_in.gyro.z;
-//     sensor_data_json["data"]["temperature"] = data_in.temp.celcius;
-//     char hex_timestamp[9]; // 8 characters for hex + 1 for null terminator
-//     sprintf(hex_timestamp, "%08x", data_in.imu_timestamp);
-//     sensor_data_json["data"]["timestamp"] = hex_timestamp;
-//     return sensor_data_json;
-// }
 
 // Generate JSON settings
 json IMU::jsonify_settings() {
@@ -191,6 +155,7 @@ void IMU::read_registers(uint8_t reg_addr, uint8_t* data, size_t length) {
 
 void IMU::select_register_bank(uint8_t bank) {
     write_register(ICM42688REG::REG_BANK_SEL, bank & 0x07); // Ensure bank is within 0-7
+    sleep_us(200);
 }
 
 void IMU::print_register(uint8_t reg_addr) {
@@ -222,6 +187,7 @@ void IMU::reset_device_configuration(){
 // Sensor configuration
 void IMU::configure_sensor() {
     reset_device_configuration();
+    sleep_us(200);
     
     set_clock(); // Uncomment if clock settings are needed
     set_power_modes(GyroPowerModes[2], AccelPowerModes[2], false); // Accel & Gyro Low Noise, Temp Enabled
@@ -420,9 +386,3 @@ void IMU::set_clock() {
 
 
 }
-
-// float IMU::round_float(float value) {
-//     uint8_t decimal_places = 4;
-//     float scaling_factor = pow(.0f, decimal_places);
-//     return roundf(value * scaling_factor) / scaling_factor;
-// }

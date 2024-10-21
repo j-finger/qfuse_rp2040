@@ -386,6 +386,11 @@ public:
     // Read IMU timestamp
     uint32_t read_imu_timestamp();
 
+    void set_accel_odr(const uint odr);
+    void set_accel_fsr(const uint fsr);
+    void set_gyro_odr(const uint odr);
+    void set_gyro_fsr(const uint fsr);
+
 private:
     // SPI variables
     spi_inst_t* spi_port_;
@@ -434,20 +439,10 @@ private:
     AccelerometerData read_accel();
     GyroscopeData read_gyro();
     TemperatureData read_temp();
-    void set_accel_odr(const uint odr);
-    void set_accel_fsr(const uint fsr);
-    void set_gyro_odr(const uint odr);
-    void set_gyro_fsr(const uint fsr);
     void calculate_sensitivity();
     void set_power_modes(const SensorSetting& accel_mode, const SensorSetting& gyro_mode, bool temp_disabled);
     void set_clock();
-    // float round_float(float value);
-    // std::string IMU::serialize_data(const SensorData& data_in)
 };
 
-/* Implementations */
-// Include the rest of your method implementations here, similar to how it's done in your main.cpp
-
-// For brevity, only key methods are shown; please include all method implementations.
 
 #endif // ICM42688_HPP

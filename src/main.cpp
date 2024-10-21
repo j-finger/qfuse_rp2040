@@ -20,10 +20,10 @@
 using json = nlohmann::json;
 
 // Define queue parameters
-#define JSON_QUEUE_SIZE 4         // Define the maximum number of JSON messages in the queue
+#define JSON_QUEUE_SIZE 3         // Define the maximum number of JSON messages in the queue
 #define JSON_STRING_MAX_LENGTH 20000  // Increased max length to accommodate more data
 const uint ODR_SEL = 6;
-const uint PACKET_STACK_SIZE = 18;
+const uint PACKET_STACK_SIZE = 20;
 
 // Create a queue for JSON strings
 queue_t json_queue;
@@ -32,7 +32,7 @@ queue_t json_queue;
 // 921600
 // UART
 #define UART_ID uart1
-#define BAUD_RATE 1152000
+#define BAUD_RATE 921600
 #define DATA_BITS 8
 #define STOP_BITS 1
 #define PARITY UART_PARITY_NONE
@@ -41,29 +41,29 @@ queue_t json_queue;
 
 // UART and SPI Macros
 // #define IMU_COUNT 2  // Number of IMUs connected
-#define IMU_COUNT 4  // Number of IMUs connected
+#define IMU_COUNT 2  // Number of IMUs connected
 
 // SPI0 (First two IMUs)
-#define SPI0_SCLK_PIN 10
-#define SPI0_MOSI_PIN 11
-#define SPI0_MISO_PIN 12
+#define SPI1_SCLK_PIN 10
+#define SPI1_MOSI_PIN 11
+#define SPI1_MISO_PIN 12
 
-#define SPI0_PORT spi1
-#define SPI0_BAUD_RATE (921600)  // 1 MHz
-
-// const uint SPI0_CS_PINS[] = {9}; // CS pins for IMUs on SPI0
-const uint SPI0_CS_PINS[] = {9, 13}; // CS pins for IMUs on SPI0
-
-// SPI1 (Next two IMUs)
-#define SPI1_SCLK_PIN 18
-#define SPI1_MOSI_PIN 19
-#define SPI1_MISO_PIN 20
-
-#define SPI1_PORT spi0
+#define SPI1_PORT spi1
 #define SPI1_BAUD_RATE (921600)  // 1 MHz
 
+// const uint SPI0_CS_PINS[] = {9}; // CS pins for IMUs on SPI0
+const uint SPI1_CS_PINS[] = {9, 13}; // CS pins for IMUs on SPI0
+
+// SPI1 (Next two IMUs)
+#define SPI0_SCLK_PIN 18
+#define SPI0_MOSI_PIN 19
+#define SPI0_MISO_PIN 20
+
+#define SPI0_PORT spi0
+#define SPI0_BAUD_RATE (921600)  // 1 MHz
+
 // const uint SPI1_CS_PINS[] = {17}; // CS pins for IMUs on SPI1
-const uint SPI1_CS_PINS[] = {17, 21}; // CS pins for IMUs on SPI1
+const uint SPI0_CS_PINS[] = {17, 21}; // CS pins for IMUs on SPI1
 
 
 
@@ -75,14 +75,15 @@ void uart_task_entry() {
             // Send the JSON string over UART
             uart_write_blocking(UART_ID, (const uint8_t*)json_str, strlen(json_str));
             // Optionally, print it to the console for debugging
-            // printf("Sent JSON over UART:\n%s\n\n", json_str);
-            printf("Sent JSON over UART:\n\n");
+            printf("Sent JSON over UART:\n%s\n\n", json_str);
+            // printf("Sent JSON over UART:\n");
 
             // Free the allocated memory
             free(json_str);
         }
     }
 }
+
 
 
 // RP2040 Controller Class
@@ -93,17 +94,13 @@ public:
         uart_initialize();
 
         // TODO: Wait for the 'Connected' message over UART
-        wait_for_connected_message();  
+        // wait_for_connected_message();  
 
-        // Initialize the queue
-        // queue_init(&json_queue, sizeof(char) * JSON_STRING_MAX_LENGTH, JSON_QUEUE_SIZE);
         // Initialize the queue to hold pointers to char arrays
         queue_init(&json_queue, sizeof(char*), JSON_QUEUE_SIZE);
 
-
         // Get RP2040 device ID
         read_device_id();
-
 
         // Initialize SPI0
         spi_init(SPI0_PORT, SPI0_BAUD_RATE);
@@ -117,17 +114,25 @@ public:
         gpio_set_function(SPI1_MOSI_PIN, GPIO_FUNC_SPI);
         gpio_set_function(SPI1_MISO_PIN, GPIO_FUNC_SPI);
 
-        // max_measurements = 2;  // Collect 5 samples per IMU
+        initialize_cs_pins();
 
-        // Initialize IMUs
-        // IMUs on SPI0
-        for (int i = 0; i < 2; i++) {
+        /* Initialize IMUs */
+        // Initialize IMUs on SPI0 (High Range IMU0)s
+        for (int i = 0; i < IMU_COUNT/2; i++) {
             IMU imu(SPI0_PORT, SPI0_CS_PINS[i], i);
+            imu.set_gyro_fsr(ICM42688SET::GYRO_FS_SEL_2000); // 0b000, 2000 dps
+            imu.set_accel_fsr(ICM42688SET::ACCEL_FS_SEL_16); // 0b000, 16g
+            imu.set_accel_odr(7); // 0b1000, 100Hz
+            imu.set_gyro_odr(7);  // 0b1000, 100Hz
             imus_.push_back(imu);
         }
-        // IMUs on SPI1
-        for (int i = 0; i < 2; i++) {
-            IMU imu(SPI1_PORT, SPI1_CS_PINS[i], i + 2); // Indexing from 2 for the next IMUs
+        // Initialize IMUs on SPI1 (Low Range IMU1)
+        for (int i = 0; i < IMU_COUNT/2; i++) {
+            IMU imu(SPI1_PORT, SPI1_CS_PINS[i], i + IMU_COUNT/2); // Indexing from 2 for the next IMUs
+            imu.set_gyro_fsr(ICM42688SET::GYRO_FS_SEL_500);  // 0b010, 500 dps
+            imu.set_accel_fsr(ICM42688SET::ACCEL_FS_SEL_4);  // 0b010, 4g
+            imu.set_accel_odr(7); // 0b1000, 100Hz
+            imu.set_gyro_odr(7);  // 0b1000, 100Hz
             imus_.push_back(imu);
         }
 
@@ -304,7 +309,18 @@ private:
     std::vector<std::vector<json>> imu_data_samples_; // Stores samples per IMU
     std::vector<uint8_t> measurement_counts_; // Counts per IMU
 
-
+    void initialize_cs_pins() {
+        for (uint pin : SPI0_CS_PINS) {
+            gpio_init(pin);
+            gpio_set_dir(pin, GPIO_OUT);
+            gpio_put(pin, 1); // Set CS high
+        }
+        for (uint pin : SPI1_CS_PINS) {
+            gpio_init(pin);
+            gpio_set_dir(pin, GPIO_OUT);
+            gpio_put(pin, 1); // Set CS high
+        }
+    }
 
     void enqueue_json(const std::string& json_str) {
         // Append newline character to indicate end of message
@@ -343,9 +359,6 @@ private:
 
         // Set UART data format
         uart_set_format(UART_ID, DATA_BITS, STOP_BITS, PARITY);
-
-        // Enable FIFO
-        // uart_set_fifo_enabled(UART_ID, true);
 
         // Disable flow control CTS/RTS
         uart_set_hw_flow(UART_ID, false, false);
