@@ -20,15 +20,19 @@
 using json = nlohmann::json;
 
 // Define queue parameters
-#define JSON_QUEUE_SIZE 10          // Define the maximum number of JSON messages in the queue
-#define JSON_STRING_MAX_LENGTH 3000  // Increased max length to accommodate more data
+#define JSON_QUEUE_SIZE 4         // Define the maximum number of JSON messages in the queue
+#define JSON_STRING_MAX_LENGTH 20000  // Increased max length to accommodate more data
+const uint ODR_SEL = 6;
+const uint PACKET_STACK_SIZE = 18;
 
 // Create a queue for JSON strings
 queue_t json_queue;
 
+
+// 921600
 // UART
 #define UART_ID uart1
-#define BAUD_RATE 115200
+#define BAUD_RATE 1152000
 #define DATA_BITS 8
 #define STOP_BITS 1
 #define PARITY UART_PARITY_NONE
@@ -45,7 +49,7 @@ queue_t json_queue;
 #define SPI0_MISO_PIN 12
 
 #define SPI0_PORT spi1
-#define SPI0_BAUD_RATE (115200)  // 1 MHz
+#define SPI0_BAUD_RATE (921600)  // 1 MHz
 
 // const uint SPI0_CS_PINS[] = {9}; // CS pins for IMUs on SPI0
 const uint SPI0_CS_PINS[] = {9, 13}; // CS pins for IMUs on SPI0
@@ -56,23 +60,30 @@ const uint SPI0_CS_PINS[] = {9, 13}; // CS pins for IMUs on SPI0
 #define SPI1_MISO_PIN 20
 
 #define SPI1_PORT spi0
-#define SPI1_BAUD_RATE (115200)  // 1 MHz
+#define SPI1_BAUD_RATE (921600)  // 1 MHz
 
 // const uint SPI1_CS_PINS[] = {17}; // CS pins for IMUs on SPI1
 const uint SPI1_CS_PINS[] = {17, 21}; // CS pins for IMUs on SPI1
 
+
+
 // Global Function for Core 1
 void uart_task_entry() {
-    char json_str[JSON_STRING_MAX_LENGTH];
+    char* json_str;
     while (true) {
-        if (queue_try_remove(&json_queue, json_str)) {
+        if (queue_try_remove(&json_queue, &json_str)) {
             // Send the JSON string over UART
             uart_write_blocking(UART_ID, (const uint8_t*)json_str, strlen(json_str));
-            uart_write_blocking(UART_ID, (const uint8_t*)"\n", 1);  // Optional: Add newline for readability
-            printf("Sent JSON over UART:\n%s\n\n", json_str);
+            // Optionally, print it to the console for debugging
+            // printf("Sent JSON over UART:\n%s\n\n", json_str);
+            printf("Sent JSON over UART:\n\n");
+
+            // Free the allocated memory
+            free(json_str);
         }
     }
 }
+
 
 // RP2040 Controller Class
 class RP2040Controller {
@@ -85,7 +96,10 @@ public:
         wait_for_connected_message();  
 
         // Initialize the queue
-        queue_init(&json_queue, sizeof(char) * JSON_STRING_MAX_LENGTH, JSON_QUEUE_SIZE);
+        // queue_init(&json_queue, sizeof(char) * JSON_STRING_MAX_LENGTH, JSON_QUEUE_SIZE);
+        // Initialize the queue to hold pointers to char arrays
+        queue_init(&json_queue, sizeof(char*), JSON_QUEUE_SIZE);
+
 
         // Get RP2040 device ID
         read_device_id();
@@ -145,25 +159,22 @@ public:
 
         while (true) {
             // Sleep to prevent tight loop
-            sleep_ms(10);
+            sleep_ms(1);
 
             absolute_time_t current_time = get_absolute_time();
 
-            // Check if it's time to read sensor data (e.g., every 1 second)
-            if (absolute_time_diff_us(last_read_time, current_time) >= 1000000) {  // 1 second
+            // Check if it's time to read sensor data (e.g., every 1 ms)
+            if (absolute_time_diff_us(last_read_time, current_time) >= 10000) {  // 10 ms
                 last_read_time = current_time;
 
                 // Read sensor data from each IMU
                 for (size_t imu_index = 0; imu_index < imus_.size(); ++imu_index) {
                     IMU& imu = imus_[imu_index];
                     SensorData data = imu.read_sensor_data();
-                    json data_json = imu.jsonify_data(data);
+                    std::string data_str = imu.jsonify_data(data);
 
-                    // Add subdevice number
-                    data_json["subdevice"] = std::to_string(imu_index);
-
-                    // Add the measurement to the imu's data samples
-                    imu_data_samples_[imu_index].push_back(data_json);
+                    // Store the JSON string in the imu's data samples
+                    imu_data_samples_[imu_index].push_back(data_str);
 
                     measurement_counts_[imu_index]++;
                 }
@@ -178,34 +189,93 @@ public:
                 }
 
                 if (all_collected) {
-                    // Build the UART packet
-                    json uart_packet;
-                    uart_packet["device"] = device_id_;
+                    // Build the UART packet manually
+                    char json_buffer[JSON_STRING_MAX_LENGTH];
+                    int total_written = 0;
 
-                    json data_array = json::array();
+                    // Start building the JSON string
+                    int written = snprintf(json_buffer + total_written, sizeof(json_buffer) - total_written,
+                                        "{\"device\":\"%s\",\"data\":[",
+                                        device_id_.c_str());
+
+                    if (written < 0 || written >= (int)(sizeof(json_buffer) - total_written)) {
+                        printf("Error building JSON string (device).\n");
+                        // Reset counts and continue
+                        reset_measurement_data();
+                        continue;  // Skip this iteration
+                    }
+                    total_written += written;
+
+                    bool first_entry = true;
+                    bool error_occurred = false;
 
                     // Loop over measurements
-                    for (uint8_t sample_index = 0; sample_index < max_measurements; ++sample_index) {
+                    for (uint8_t sample_index = 0; sample_index < max_measurements && !error_occurred; ++sample_index) {
                         // Loop over IMUs
                         for (size_t imu_index = 0; imu_index < imus_.size(); ++imu_index) {
                             // Get the sample data for this IMU and sample index
-                            json sample_data = imu_data_samples_[imu_index][sample_index];
+                            const std::string& sample_data_str = imu_data_samples_[imu_index][sample_index];
 
-                            data_array.push_back(sample_data);
+                            // Append comma if not the first entry
+                            if (!first_entry) {
+                                if (total_written >= sizeof(json_buffer) - 1) {
+                                    error_occurred = true;
+                                    printf("Buffer overflow when adding comma.\n");
+                                    break;
+                                }
+                                json_buffer[total_written++] = ',';
+                            } else {
+                                first_entry = false;
+                            }
+
+                            // Append the sample data string
+                            int remaining_buffer = sizeof(json_buffer) - total_written;
+                            if (remaining_buffer <= 0) {
+                                error_occurred = true;
+                                printf("Buffer overflow before adding sample data.\n");
+                                break;
+                            }
+                            written = snprintf(json_buffer + total_written, remaining_buffer,
+                                            "%s", sample_data_str.c_str());
+                            if (written < 0 || written >= remaining_buffer) {
+                                printf("Error building JSON string (sample data).\n");
+                                error_occurred = true;
+                                break;  // Exit the loop
+                            }
+                            total_written += written;
+                        }
+
+                        if (error_occurred) {
+                            break;  // Exit outer loop if an error occurred
                         }
                     }
 
-                    uart_packet["data"] = data_array;
+                    if (!error_occurred) {
+                        // Close the JSON string
+                        int remaining_buffer = sizeof(json_buffer) - total_written;
+                        if (remaining_buffer <= 0) {
+                            printf("Buffer overflow when closing JSON.\n");
+                            error_occurred = true;
+                        } else {
+                            written = snprintf(json_buffer + total_written, remaining_buffer, "]}");
+                            if (written < 0 || written >= remaining_buffer) {
+                                printf("Error closing JSON string.\n");
+                                error_occurred = true;
+                            } else {
+                                total_written += written;
+                            }
+                        }
+                    }
 
-                    // Enqueue the UART packet
-                    enqueue_json(uart_packet);
-                    // printf("Enqueued Data JSON:\n%s\n\n", uart_packet.dump(4).c_str());
+                    if (!error_occurred) {
+                        // Enqueue the JSON string
+                        enqueue_json(std::string(json_buffer, total_written));
+                    } else {
+                        printf("Error occurred during JSON construction, not enqueuing partial data.\n");
+                    }
 
                     // Reset measurement counts and clear data samples
-                    for (size_t i = 0; i < measurement_counts_.size(); ++i) {
-                        measurement_counts_[i] = 0;
-                        imu_data_samples_[i].clear();
-                    }
+                    reset_measurement_data();
                 }
 
                 // Perform other non-blocking tasks here if needed
@@ -214,43 +284,50 @@ public:
         }
     }
 
+
+    // Helper function to reset measurement counts and data samples
+    void reset_measurement_data() {
+        for (size_t i = 0; i < measurement_counts_.size(); ++i) {
+            measurement_counts_[i] = 0;
+            imu_data_samples_[i].clear();
+        }
+    }
+
+
+
+
+
 private:
     std::vector<IMU> imus_;
     std::string device_id_;
-    const static uint8_t max_measurements = 3;
+    const static uint8_t max_measurements = PACKET_STACK_SIZE;
     std::vector<std::vector<json>> imu_data_samples_; // Stores samples per IMU
     std::vector<uint8_t> measurement_counts_; // Counts per IMU
 
-    // // Function to enqueue JSON strings for UART transmission
-    // void enqueue_json(const json& json_obj) {
-    //     std::string json_str = json_obj.dump();
-    //     // Ensure the JSON string does not exceed the maximum length
-    //     if (json_str.length() >= JSON_STRING_MAX_LENGTH) {
-    //         printf("JSON string too long to enqueue.\n");
-    //         return;
-    //     }
 
-    //     // Enqueue the JSON string
-    //     if (!queue_try_add(&json_queue, json_str.c_str())) {
-    //         printf("Failed to enqueue JSON string.\n");
-    //     }
-    // }
 
-// Function to enqueue JSON strings for UART transmission
-    void enqueue_json(const json& json_obj) {
-        std::string json_str = json_obj.dump();
+    void enqueue_json(const std::string& json_str) {
         // Append newline character to indicate end of message
-        json_str += "\n";
+        std::string json_with_newline = json_str + "\n";
 
         // Ensure the JSON string does not exceed the maximum length
-        if (json_str.length() >= JSON_STRING_MAX_LENGTH) {
+        if (json_with_newline.length() >= JSON_STRING_MAX_LENGTH) {
             printf("JSON string too long to enqueue.\n");
             return;
         }
 
-        // Enqueue the JSON string
-        if (!queue_try_add(&json_queue, json_str.c_str())) {
+        // Allocate memory for the JSON string
+        char* json_str_buffer = (char*)malloc(json_with_newline.length() + 1);
+        if (json_str_buffer == NULL) {
+            printf("Failed to allocate memory for JSON string.\n");
+            return;
+        }
+        strcpy(json_str_buffer, json_with_newline.c_str());
+
+        // Enqueue the pointer to the JSON string
+        if (!queue_try_add(&json_queue, &json_str_buffer)) {
             printf("Failed to enqueue JSON string.\n");
+            free(json_str_buffer);
         }
     }
 

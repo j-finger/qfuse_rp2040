@@ -1,10 +1,12 @@
 #include "ICM42688.hpp"
 
+#include <math.h>    // For pow and roundf
+#include <stdio.h>   // For snprintf
 // Constructor
 IMU::IMU(spi_inst_t* spi_port, uint cs_pin, uint8_t subdevice_id)
     : spi_port_(spi_port), cs_pin_(cs_pin), subdevice_id_(subdevice_id) {
     defaultFSR_ = 2; // ±4g accel, ±500 dps gyro
-    defaultODR_ = 10; // 12.5 Hz
+    defaultODR_ = 6; // 12.5 Hz
     initialize();
 }
 
@@ -22,7 +24,7 @@ void IMU::initialize() {
 
 // Read sensor data
 SensorData IMU::read_sensor_data() {
-    printf("Reading sensor data from IMU %d\n", subdevice_id_);
+    // printf("Reading sensor data from IMU %d\n", subdevice_id_);
     SensorData data;
     data.accel = read_accel();
     data.gyro = read_gyro();
@@ -31,24 +33,47 @@ SensorData IMU::read_sensor_data() {
     return data;
 }
 
-// Generate JSON data
-json IMU::jsonify_data(const SensorData& data_in) {
-    json sensor_data_json;
 
-    char hex_timestamp[9]; // 8 characters for hex + 1 for null terminator
-    sprintf(hex_timestamp, "%08x", data_in.imu_timestamp);
+// Generate JSON data
+// json IMU::jsonify_data(const SensorData& data_in) {
+//     json sensor_data_json;
+
+//     char hex_timestamp[9]; // 8 characters for hex + 1 for null terminator
+//     sprintf(hex_timestamp, "%08x", data_in.imu_timestamp);
     
-    sensor_data_json["subdevice"] = subdevice_id_;
-    sensor_data_json["accelerometer"]["x"] = data_in.accel.x;
-    sensor_data_json["accelerometer"]["y"] = data_in.accel.y;
-    sensor_data_json["accelerometer"]["z"] = data_in.accel.z;
-    sensor_data_json["gyroscope"]["x"] = data_in.gyro.x;
-    sensor_data_json["gyroscope"]["y"] = data_in.gyro.y;
-    sensor_data_json["gyroscope"]["z"] = data_in.gyro.z;
-    sensor_data_json["temperature"] = data_in.temp.celcius;
-    sensor_data_json["timestamp"] = hex_timestamp;
-    return sensor_data_json;
+//     sensor_data_json["subdevice"] = subdevice_id_;
+//     sensor_data_json["accelerometer"]["x"] =    data_in.accel.x;
+//     sensor_data_json["accelerometer"]["y"] =    data_in.accel.y;
+//     sensor_data_json["accelerometer"]["z"] =    data_in.accel.z;
+//     sensor_data_json["gyroscope"]["x"] =        data_in.gyro.x;
+//     sensor_data_json["gyroscope"]["y"] =        data_in.gyro.y;
+//     sensor_data_json["gyroscope"]["z"] =        data_in.gyro.z;
+//     sensor_data_json["temperature"] =           data_in.temp.celcius;
+//     sensor_data_json["timestamp"] = hex_timestamp;
+//     return sensor_data_json;
+// }
+
+// TODO: Make sure this function builds a JSON in the exact same format as the function above
+// Generate JSON data
+std::string IMU::jsonify_data(const SensorData& data_in) {
+    char buffer[512];
+
+    // Construct JSON string manually with limited decimal places
+    int written = snprintf(buffer, sizeof(buffer),
+             "{\"subdevice\":\"%d\","
+             "\"timestamp\":\"%08x\","
+             "\"accel\":{\"x\":%.4f,\"y\":%.4f,\"z\":%.4f},"
+             "\"gyro\":{\"x\":%.4f,\"y\":%.4f,\"z\":%.4f},"
+             "\"temperature\":%.4f}",
+             subdevice_id_,
+             data_in.imu_timestamp,
+             data_in.accel.x, data_in.accel.y, data_in.accel.z,
+             data_in.gyro.x, data_in.gyro.y, data_in.gyro.z,
+             data_in.temp.celcius);
+
+    return std::string(buffer);
 }
+
 
 // // Generate JSON data
 // json IMU::jsonify_data(const SensorData& data_in) {
@@ -133,7 +158,7 @@ void IMU::write_register(uint8_t reg_addr, uint8_t data) {
     cs_select();
     spi_write_blocking(spi_port_, tx_buf, 2);
     cs_deselect();
-    sleep_ms(10);
+    // sleep_ms(1);
 }
 
 uint8_t IMU::read_register(uint8_t reg_addr) {
@@ -191,7 +216,7 @@ void IMU::setup_spi() {
 
 void IMU::reset_device_configuration(){
     write_register(ICM42688REG::DEVICE_CONFIG, 0x01);
-    sleep_ms(100);
+    sleep_ms(10);
 }
 
 // Sensor configuration
@@ -395,3 +420,9 @@ void IMU::set_clock() {
 
 
 }
+
+// float IMU::round_float(float value) {
+//     uint8_t decimal_places = 4;
+//     float scaling_factor = pow(.0f, decimal_places);
+//     return roundf(value * scaling_factor) / scaling_factor;
+// }

@@ -377,7 +377,8 @@ public:
     SensorData read_sensor_data();
 
     // Generate JSON data
-    json jsonify_data(const SensorData& data_in);
+    // json jsonify_data(const SensorData& data_in);
+    std::string jsonify_data(const SensorData& data_in);
 
     // Generate JSON settings
     json jsonify_settings();
@@ -440,6 +441,8 @@ private:
     void calculate_sensitivity();
     void set_power_modes(const SensorSetting& accel_mode, const SensorSetting& gyro_mode, bool temp_disabled);
     void set_clock();
+    // float round_float(float value);
+    // std::string IMU::serialize_data(const SensorData& data_in)
 };
 
 /* Implementations */
