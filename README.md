@@ -1,152 +1,70 @@
-# qfuse RP2040 Firmware
+# RP2040 Firmware for `qfuse` IMU Data Acquisition System
+
 ## Overview
 
-The `qfuse` RP2040 Firmware is designed to interface with the ICM-42688 IMU sensors connected to the RP2040 microcontroller. It performs sensor data collection, configuration, and serialization into JSON format for transmission over UART. The firmware is modular, utilizing both functional and object-oriented programming paradigms to ensure maintainability and scalability.
+This repository contains the firmware for the RP2040 microcontroller used in the `qfuse` development board. The firmware is responsible for interfacing with multiple ICM-42688-P IMU sensors via SPI, collecting high-precision accelerometer and gyroscope data, and transmitting the serialized data to the ESP32C6 module over UART. The collected data is intended for sensor fusion applications in motion tracking and vibration analysis, forming the foundation for product development.
 
 ## Features
 
-- **Sensor Fusion**: Collects data from multiple IMU sensors (accelerometer, gyroscope, temperature).
-- **SPI Communication**: Interfaces with ICM-42688 IMU sensors using SPI protocol.
-- **JSON Serialization**: Converts sensor data and settings into JSON format for easy transmission and integration.
-- **UART Communication**: Sends serialized JSON data to the ESP32C6 module via UART.
-- **Configurable Settings**: Allows customization of sensor parameters such as ODR (Output Data Rate), FSR (Full Scale Range), and power modes.
-- **Device Identification**: Generates a unique device ID based on the RP2040's unique board ID.
-- **Modular Design**: Organized into classes and structures for easy maintenance and future enhancements.
+- **SPI Communication with Multiple IMUs**: Supports reading data from multiple ICM-42688-P sensors using SPI0 and SPI1 interfaces.
+- **Data Serialization**: Sensor data is serialized into JSON format for consistent data structure and ease of parsing downstream.
+- **UART Communication**: Transmits serialized data to the ESP32C6 module via UART at a baud rate of 921600.
+- **Multicore Processing**: Utilizes both cores of the RP2040; Core 0 handles data collection, and Core 1 handles UART transmission.
+- **High Data Rate**: Configurable output data rate (ODR) up to 100Hz for both accelerometer and gyroscope data.
+- **Time Synchronization**: Each data packet includes a timestamp from the IMU and the RP2040's unique device ID.
+- **Modular Design**: Code is organized into classes and modules for scalability and maintainability.
 
-## Prerequisites
+## Hardware Setup
 
-- **Hardware:**
-    - `qfuse` Dev board 
-        - RP2040-based board (e.g., Raspberry Pi Pico)
-        - ICM-42688 IMU sensor(s)
-        - ESP32C6 module for UART communication
-        - Connecting wires
-        - Breadboard or custom PCB for connections
+### Components
 
-- **Software:**
-  - C++ Compiler (supported by the Raspberry Pi Pico SDK)
-  - [Pico SDK](https://github.com/raspberrypi/pico-sdk) version 1.5.1
-  - [CMake](https://cmake.org/) version 3.13 or higher
-  - [nlohmann/json](https://github.com/nlohmann/json) library for JSON handling
+- **RP2040 Microcontroller**: Acts as the main controller for data acquisition and processing.
+- **ICM-42688-P IMU Sensors**: High-precision accelerometer and gyroscope sensors.
+- **ESP32C6 Module**: Handles communication with the backend server over Wi-Fi.
+- **`qfuse` Development Board**: Custom PCB integrating the above components.
+- **UART Connection**: Connects the RP2040's UART1 (TX on GPIO 5, RX on GPIO 4) to the ESP32C6 module.
+- **SPI Connections**:
+  - **SPI0**: Uses GPIO 18 (SCK), GPIO 19 (MOSI), GPIO 20 (MISO) with CS pins on GPIO 17 and GPIO 21.
+  - **SPI1**: Uses GPIO 10 (SCK), GPIO 11 (MOSI), GPIO 12 (MISO) with CS pins on GPIO 9 and GPIO 13.
 
-## Installation
+### Pin Assignments
 
-1. **Clone the Repository**
+| Interface | Signal | GPIO Pin | Device  |
+| --------- | ------ | -------- | ------- |
+| UART1     | TXD    | GPIO 5   | ESP32C6 |
+| UART1     | RXD    | GPIO 4   | ESP32C6 |
+| SPI0      | SCK    | GPIO 18  | IMU0&1  |
+| SPI0      | MOSI   | GPIO 19  | IMU0&1  |
+| SPI0      | MISO   | GPIO 20  | IMU0&1  |
+| SPI0      | CS     | GPIO 17  | IMU0&1  |
+| SPI0      | CS     | GPIO 21  | IMU0&1  |
+| SPI1      | SCK    | GPIO 10  | IMU2&3  |
+| SPI1      | MOSI   | GPIO 11  | IMU2&3  |
+| SPI1      | MISO   | GPIO 12  | IMU2&3  |
+| SPI1      | CS     | GPIO 9   | IMU2&3  |
+| SPI1      | CS     | GPIO 13  | IMU2&3  |
 
-   ```bash
-   git clone https://github.com/yourusername/qfuse-rp2040-firmware.git
-   cd qfuse-rp2040-firmware
-   ```
+### IMU Configuration
 
-2. **Set Up the Pico SDK**
+- **IMU 0 and IMU 1** (Connected to SPI0):
+  - Gyroscope FSR: ±2000 dps
+  - Accelerometer FSR: ±16 g
+- **IMU 2 and IMU 3** (Connected to SPI1):
+  - Gyroscope FSR: ±500 dps
+  - Accelerometer FSR: ±4 g
+- **Output Data Rate**:
+  - Gyroscope ODR: 100 Hz
+  - Accelerometer ODR: 100 Hz
 
-   Follow the [official Pico SDK setup guide](https://github.com/raspberrypi/pico-sdk) to install and initialize the SDK.
+## Software Dependencies
 
-   ```bash
-   git clone https://github.com/raspberrypi/pico-sdk.git
-   export PICO_SDK_PATH=/path/to/pico-sdk
-   ```
+- **Pico SDK**: Required for building firmware for the RP2040 microcontroller.
+- **CMake**: Version 3.13 or higher.
+- **GNU Arm Embedded Toolchain**: For cross-compiling to ARM Cortex-M0+.
+- **nlohmann/json**: JSON library for C++ (header-only).
+- **Standard C++ Libraries**: Requires C++17 support.
 
-3. **Install Dependencies**
-
-   Ensure that the `nlohmann/json` library is available. You can include it as a submodule or install it via your package manager.
-
-   ```bash
-   # Example using vcpkg
-   git clone https://github.com/microsoft/vcpkg.git
-   cd vcpkg
-   ./bootstrap-vcpkg.sh
-   ./vcpkg integrate install
-   ./vcpkg install nlohmann-json
-   ```
-
-   Alternatively, download the single-header file from [here](https://github.com/nlohmann/json/releases) and place it in the `include/` directory.
-
-## Setup
-
-### Hardware Connections
-
-1. **SPI Connections between RP2040 and ICM-42688:**
-
-   | RP2040 Pin | ICM-42688 Pin | Function       |
-   |------------|---------------|----------------|
-   | GPIO 18    | SCLK          | SPI Clock      |
-   | GPIO 19    | MOSI          | SPI Master Out |
-   | GPIO 20    | MISO          | SPI Master In  |
-   | GPIO 21    | CS            | Chip Select    |
-   | GND        | GND           | Ground         |
-   | 3.3V       | VCC           | Power          
-
-2. **UART Connections between RP2040 and ESP32C6:**
-
-   | RP2040 Pin | ESP32C6 Pin | Function  |
-   |------------|-------------|-----------|
-   | GPIO 8     | TXD         | UART TX   |
-   | GPIO 9     | RXD         | UART RX   |
-   | GND        | GND         | Ground    |
-
-   **Note:** Ensure voltage levels are compatible or use level shifters if necessary.
-
-### Firmware Configuration
-
-1. **Configure Sensor Settings:**
-
-   Modify the `main.cpp` file to adjust sensor settings such as ODR, FSR, and power modes as per your application requirements.
-
-2. **Device ID:**
-
-   The firmware automatically generates a unique device ID based on the RP2040's unique board ID. No manual configuration is required.
-
-## Building and Uploading
-
-1. **Create a Build Directory**
-
-   ```bash
-   mkdir build
-   cd build
-   ```
-
-2. **Generate Build Files with CMake**
-
-   ```bash
-   cmake .. -DCMAKE_BUILD_TYPE=Release
-   ```
-
-3. **Build the Firmware**
-
-   ```bash
-   make
-   ```
-
-4. **Upload the Firmware to RP2040**
-
-   - **Manual Method:**
-     - Hold down the BOOTSEL button on the RP2040 board.
-     - Connect it to your computer via USB. It should mount as a mass storage device.
-     - Drag and drop the generated `.uf2` file from the `build` directory to the RP2040's storage.
-
-   - **Using `picotool`:**
-     ```bash
-     picotool load qfuse-rp2040-firmware.uf2
-     ```
-
-## Usage
-
-### Running the Firmware
-
-After uploading the firmware, the RP2040 will initialize the IMU sensors and begin collecting data. It will serialize the data into JSON format and transmit it over UART to the ESP32C6 module.
-
-### UART Communication
-
-- **Sending Data:**
-
-  The firmware sends JSON-formatted sensor data and settings over UART. Ensure that the ESP32C6 is configured to receive and process this data.
-
-- **Receiving Data:**
-
-  Currently, the firmware includes stubs for sending and receiving data over UART. Implement the `send_json` and UART receive functionalities as needed to integrate with your backend systems.
-
-## Project Structure
+## Directory Structure
 
 ```
 qfuse-rp2040-firmware/
@@ -160,18 +78,103 @@ qfuse-rp2040-firmware/
 └── build/                  # Build directory (generated after CMake)
 ```
 
-- **include/**: Contains header files and external libraries.
-- **src/**: Contains the main firmware source code.
-- **CMakeLists.txt**: Configuration file for CMake to build the project.
-- **build/**: Directory where build artifacts are generated.
 
-## Code Description
+- `src/`: Contains the source code files.
+  - `main.cpp`: Entry point of the firmware.
+  - `ICM42688.hpp` and `ICM42688.cpp`: Implementation of the IMU class for interfacing with the ICM-42688-P sensor.
+  - `json.hpp`: Header file for the JSON library.
+- `CMakeLists.txt`: CMake build configuration file.
 
-### ICM42688.h
+## Build Instructions
+
+### Prerequisites
+
+1. **Install the Pico SDK**:
+   - Follow the instructions at [Getting Started with Raspberry Pi Pico](https://datasheets.raspberrypi.com/pico/getting-started-with-pico.pdf) to set up the Pico SDK on your system.
+   - Ensure that the `PICO_SDK_PATH` environment variable is set to the location of the Pico SDK.
+2. **Install CMake**:
+   - Version 3.13 or higher is required.
+3. **Install the GNU Arm Embedded Toolchain**:
+   - Ensure that the `arm-none-eabi-gcc` compiler is installed and accessible in your PATH.
+4. **Install nlohmann/json**:
+   - The `json.hpp` file is included in the `src/` directory.
+
+### Building the Firmware
+
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/yourusername/qfuse-rp2040-firmware.git
+   cd qfuse-rp2040-firmware
+   ```
+2. **Create a Build Directory**:
+   ```bash
+   mkdir build
+   cd build
+   ```
+3. **Configure the Build**:
+   ```bash
+   cmake ..
+   ```
+   - Ensure that the `PICO_SDK_PATH` is correctly set.
+   - If the Pico SDK is located in a non-standard location, you can specify it directly:
+     ```bash
+     cmake -DPICO_SDK_PATH=/path/to/pico-sdk ..
+     ```
+4. **Build the Firmware**:
+   ```bash
+   make
+   ```
+   - This will generate a `.uf2` firmware file (e.g., `labs.uf2`) in the `build` directory.
+
+### Flashing the Firmware
+
+1. **Connect the RP2040 Board**:
+   - Hold down the BOOTSEL button on the RP2040 board.
+   - Connect the board to your computer via USB.
+   - Release the BOOTSEL button after connecting.
+2. **Copy the Firmware**:
+   - The RP2040 will appear as a mass storage device named `RPI-RP2`.
+   - Copy the generated `.uf2` file to the `RPI-RP2` drive.
+3. **Reset the Board**:
+   - The board will automatically reboot and start running the new firmware.
+
+**Alternatively Using `picotool`:**
+```bash
+picotool load qfuse-rp2040-firmware.uf2
+```
+
+## Usage Instructions
+
+After uploading the firmware, the RP2040 will initialize the IMU sensors and begin collecting data. It will serialize the data into JSON format and transmit it over UART to the ESP32C6 module.
+
+1. **Power On the System**:
+   - Ensure that the `qfuse` board is powered and connected to the ESP32C6 module.
+2. **Start the ESP32C6 Module**:
+   - The ESP32C6 should be running its corresponding firmware to receive data over UART and transmit it over Wi-Fi.
+3. **Data Transmission**:
+   - The RP2040 will collect data from the IMUs at the configured ODR and transmit serialized JSON data over UART to the ESP32C6.
+   - The data packets include accelerometer and gyroscope readings, timestamps, and the device ID.
+4. **Data Reception**:
+   - The ESP32C6 module will forward the data to the backend server via MQTT.
+
+## Code Organization
+
+### `main.cpp`
+
+**Location:** `src/main.cpp`
+The core firmware logic for the RP2040 microcontroller. It initializes SPI communication with the IMU sensors, configures sensor settings, reads sensor data, serializes it into JSON, and transmits it over UART.
+- **Class `RP2040Controller`**:
+  - Initializes UART and SPI interfaces.
+  - Manages a vector of `IMU` objects.
+  - Handles data collection and transmission loops.
+  - Uses multicore processing to offload UART transmission to Core 1.
+- **Functions**:
+  - `uart_task_entry()`: Entry point for Core 1 to handle UART transmission.
+  - `main()`: Initializes the controller and starts the data collection process.
+
+### `ICM42688.hpp` and `ICM42688.cpp`
 
 **Location:** `include/ICM42688.h`
-
-**Description:**
 
 Defines register addresses and settings constants for the ICM-42688 IMU sensor. Organized into namespaces for registers (`ICM42688REG`) and settings (`ICM42688SET`), facilitating easy reference and maintenance.
 
@@ -179,20 +182,28 @@ Defines register addresses and settings constants for the ICM-42688 IMU sensor. 
 
 - **Register Definitions:** Constants representing various register addresses in different user banks.
 - **Settings Definitions:** Constants representing various configuration settings like ODR, FSR for accelerometer and gyroscope.
+- **Class `IMU`**:
+  - Encapsulates the functionality for interfacing with an ICM-42688-P sensor.
+  - Handles SPI communication, sensor configuration, and data reading.
+  - Provides methods to serialize sensor data into JSON strings.
 
-### main.cpp
+### `CMakeLists.txt`
 
-**Location:** `src/main.cpp`
+- Configures the build process.
+- Includes settings for cross-compilation to the RP2040.
+- Links necessary libraries and sets up the build targets.
 
-**Description:**
+## Configuration
 
-The core firmware logic for the RP2040 microcontroller. It initializes SPI communication with the IMU sensors, configures sensor settings, reads sensor data, serializes it into JSON, and transmits it over UART.
-
-#### Classes
-
+- **Adjusting IMU Settings**:
+  - The IMU settings such as ODR and FSR can be adjusted in the `IMU` class methods `set_accel_odr()`, `set_accel_fsr()`, `set_gyro_odr()`, and `set_gyro_fsr()`.
+  - In `main.cpp`, the IMU instances are initialized with specific settings; these can be modified to suit your requirements.
+- **UART Baud Rate**:
+  - The UART baud rate is set to `921600` in `main.cpp`. Ensure that the ESP32C6 module is configured to use the same baud rate.
+- **Data Packet Size**:
+  - The maximum number of measurements per packet is defined by `PACKET_STACK_SIZE`. Adjust this value based on memory constraints and data throughput requirements.
+### Components
 ##### IMU Driver
-
-**Description:**
 
 Represents an individual ICM-42688 IMU sensor. Handles sensor initialization, configuration, data reading, and JSON serialization.
 
@@ -229,8 +240,6 @@ Represents an individual ICM-42688 IMU sensor. Handles sensor initialization, co
 
 ##### RP2040Controller
 
-**Description:**
-
 Manages the overall operation of the RP2040, including initializing IMU sensors, reading data, and handling UART communication.
 
 **Key Methods:**
@@ -254,14 +263,9 @@ Manages the overall operation of the RP2040, including initializing IMU sensors,
 - **SensorSetting, BoolSetting, AAFSetting:** Structures to represent various sensor configurations.
 - **AccelerometerData, GyroscopeData, TemperatureData, SensorData:** Structures to hold sensor readings.
 
-#### JSON Handling
-
-Utilises the `nlohmann::json` library to serialise sensor data and settings into JSON format, facilitating easy transmission and integration with backend systems.
-
 ## JSON Data Format
 
-For testing purposes we will use the following JSON packets to simulate the data that will be transmitted over MQTT. 
-
+For testing purposes the following JSON packet structure is used that will be transmitted over MQTT. 
 
 **Data** `data.json`
 ```json
@@ -301,28 +305,6 @@ For testing purposes we will use the following JSON packets to simulate the data
 }
 ```
 
-**Settings** `settings.json` - without filtering - currently being used in development
-```json
-{
-    "device": "E46338809B472231",
-    "time": "1728792656",
-    "settings": {
-	    "subdevice": "1",
-        "accel_odr": "100Hz",
-        "accel_fsr": "±4g",
-        "accel_sensitivity": 8192.0,
-        "gyro_odr": "100Hz",
-        "gyro_fsr": "±500dps",
-        "gyro_sensitivity": 65.5,
-        "power": {
-            "accel_mode": "Low Noise",
-            "gyro_mode": "Low Noise"
-        }
-    }
-}
-
-```
-
 **Logs** `logs.json`
 ```json
 {
@@ -335,7 +317,12 @@ For testing purposes we will use the following JSON packets to simulate the data
 - **Timestamp** will be in the form of 'ticks' from the IMU. Left in the form of a 24bit hexadecimal as output from the IMU's. These are dependant on the IMU ODR and the external system clock. These are only used for *actual 'data'* from the IMU's and will not be included in logs or settings JSONs. 
 - **Time** will be in the form of UNIX epoch time. This will be used in IMU data, logs and settings JSONs. It will be handled solely on the ESP32C6 side. The RP2040 will pass IMU data, settings, and logs to the ESP32C6, which will append the current time to the JSON data before sending it to the server.
 
-
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+## Acknowledgments
+
+- **[Pico SDK](https://github.com/raspberrypi/pico-sdk):** For providing the development environment for the RP2040.
+- **[nlohmann/json](https://github.com/nlohmann/json)**: For the JSON serialization library.
+- **InvenSense**: For the ICM-42688-P sensor datasheets and technical resources.
